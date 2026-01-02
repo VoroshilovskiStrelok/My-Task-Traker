@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 	"time"
-	"ty-task-tracker/models" // проверь, чтобы здесь было именно ty- или my-
+	"ty-task-tracker/models" 
 )
 
 func main() {
