@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -40,10 +41,11 @@ func main() {
 		var filter string
 		if len(args) > 1 {
 			filter = strings.ToLower(args[1])
-			// Валидация фильтра статуса
-			valid := map[string]bool{"todo": true, "in-progress": true, "done": true}
-			if !valid[filter] {
-				fmt.Printf("Ошибка: Неверный фильтр '%s'. Доступные: todo, in-progress, done\n", filter)
+			// Список разрешенных фильтров
+			validFilters := map[string]bool{"todo": true, "in-progress": true, "done": true}
+
+			if !validFilters[filter] {
+				fmt.Printf("Ошибка: Неверный фильтр '%s'.\nДоступные: todo, in-progress, done (или оставьте пустым для всех задач).\n", filter)
 				os.Exit(1)
 			}
 		}
@@ -114,6 +116,11 @@ func main() {
 
 // addTask — добавляет новую задачу (Загрузить + добавить + Сохранить).
 func addTask(desc string) {
+	desc = strings.TrimSpace(desc) // Чистим пробелы
+	if desc == "" {
+		fmt.Println("Ошибка: Описание задачи не может быть пустым.")
+		os.Exit(1)
+	}
 	tasks, err := models.LoadTasks()
 	if err != nil {
 		fmt.Printf("Ошибка загрузки задач: %v\n", err)
@@ -143,6 +150,13 @@ func addTask(desc string) {
 
 // updateTask — находит задачу по ID и меняет её описание.
 func updateTask(id int, newDesc string) {
+	// Валидация: убираем лишние пробелы и проверяем на пустоту
+	newDesc = strings.TrimSpace(newDesc)
+	if newDesc == "" {
+		fmt.Println("Ошибка: Описание задачи не может быть пустым.")
+		os.Exit(1)
+	}
+
 	tasks, err := models.LoadTasks()
 	if err != nil {
 		fmt.Printf("Ошибка загрузки задач: %v\n", err)
@@ -206,6 +220,12 @@ func markTask(id int, status string) {
 		os.Exit(1)
 	}
 
+	// Graceful check: если статус уже такой же, ничего не делаем
+	if tasks[idx].Status == status {
+		fmt.Printf("Задача %d уже имеет статус '%s'.\n", id, status)
+		return
+	}
+
 	tasks[idx].Status = status
 	tasks[idx].UpdateTimestamp() // Обновляем время изменения
 
@@ -231,7 +251,7 @@ func listTasks(filter string) {
 		fmt.Println("Задачи не найдены.")
 		return
 	}
-
+	// фильтрация
 	var filtered []models.Task
 	for _, t := range tasks {
 		if filter == "" || t.Status == filter {
@@ -248,18 +268,27 @@ func listTasks(filter string) {
 		return
 	}
 
-	filterName := filter
-	if filterName == "" {
-		filterName = "все"
-	}
+	// Сортировка по CreatedAt по возрастанию
+	sort.Slice(filtered, func(i, j int) bool {
+		return filtered[i].ID < filtered[j].ID
+	})
 
-	fmt.Printf("Ваши  %s задачи (%d всего):\n", map[string]string{"": "all", "todo": "todo", "in-progress": "in-progress", "done": "done"}[filter], len(filtered))
+	// ПЕЧАТЬ ТАБЛИЦЫ
+	fmt.Printf("\n%-3s | %-30s | %-12s | %-12s | %-12s\n", "ID", "Description", "Status", "Created", "Updated")
+	fmt.Println(strings.Repeat("-", 80)) // Разделительная линия
+
 	for _, t := range filtered {
-		fmt.Printf("ID: %d | %s | Status: %s | Created: %s | Updated: %s\n",
-			t.ID, t.Description, t.Status,
-			t.CreatedAt.Format("2006-01-02 15:04"), // YYYY-MM-DD HH:MM
-			t.UpdatedAt.Format("2006-01-02 15:04"))
+		statusUpper := strings.ToUpper(t.Status)
+		// Формат даты: Месяц/День Часы:Минуты
+		created := t.CreatedAt.Format("01/02 15:04")
+		updated := t.UpdatedAt.Format("01/02 15:04")
+
+		// %-3d — число, 3 символа, выравнивание влево
+		// %-30.30s — строка, 30 символов, обрезается если длиннее
+		fmt.Printf("%-3d | %-30.30s | %-12s | %-12s | %-12s\n",
+			t.ID, t.Description, statusUpper, created, updated)
 	}
+	fmt.Printf("\nВсего задач в списке: %d\n", len(filtered))
 }
 
 // findTaskIndex ищет индекс задачи по ID. -1 если не найден.
@@ -274,12 +303,19 @@ func findTaskIndex(tasks []models.Task, id int) int {
 
 // printUsage — простая справка.
 func printUsage() {
-	fmt.Println("Использование: task-cli <command> [args]")
-	fmt.Println("Команды:")
-	fmt.Println("  add <description>             Добавить задачу")
-	fmt.Println("  list [todo|in-progress|done]  Показать список")
-	fmt.Println("  update <ID> <description>     Обновить описание")
-	fmt.Println("  delete <ID>                   Удалить задачу")
-	fmt.Println("  mark-in-progress <ID>         Сделать 'в процессе'")
-	fmt.Println("  mark-done <ID>                Сделать 'выполнено'")
+	fmt.Println("Task Tracker CLI — Управляй своими задачами из терминала")
+	fmt.Println("\nИспользование:")
+	fmt.Println("  task-cli <command> [arguments]")
+	fmt.Println("\nКоманды:")
+	fmt.Println("  add <описание>             Добавить новую задачу")
+	fmt.Println("  list                       Показать все задачи")
+	fmt.Println("  list <статус>              Фильтр по статусу (todo, in-progress, done)")
+	fmt.Println("  update <ID> <описание>     Изменить описание задачи")
+	fmt.Println("  delete <ID>                Удалить задачу по ID")
+	fmt.Println("  mark-in-progress <ID>      Установить статус 'в процессе'")
+	fmt.Println("  mark-done <ID>             Установить статус 'выполнено'")
+	fmt.Println("\nПримеры:")
+	fmt.Println("  ./task-cli add \"Купить хлеб\"")
+	fmt.Println("  ./task-cli list todo")
+	fmt.Println("  ./task-cli mark-done 1")
 }
