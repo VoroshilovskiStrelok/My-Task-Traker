@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 	"ty-task-tracker/models"
@@ -48,6 +49,63 @@ func main() {
 		}
 		listTasks(filter)
 
+	case "update":
+		// Проверяем, что переданы и ID, и новое описание
+		if len(args) < 3 {
+			fmt.Println("Ошибка: Использование: task-cli update <ID> <новое описание>")
+			os.Exit(1)
+		}
+
+		idStr := args[1]
+		id, err := strconv.Atoi(idStr)
+		if err != nil {
+			fmt.Printf("Ошибка: Неверный ID '%s'. Он должен быть числом.\n", idStr)
+			os.Exit(1)
+		}
+
+		newDesc := args[2]
+		updateTask(id, newDesc)
+
+	case "delete":
+		if len(args) < 2 {
+			fmt.Println("Ошибка: Использование: task-cli delete <ID>")
+			os.Exit(1)
+		}
+		idStr := args[1]
+		id, err := strconv.Atoi(idStr)
+		if err != nil {
+			fmt.Printf("Ошибка: Неверный ID '%s'. Он должен быть числом.\n", idStr)
+			os.Exit(1)
+		}
+
+		deleteTask(id)
+
+	case "mark-in-progress":
+		if len(args) < 2 {
+			fmt.Println("Ошибка: Использование: task-cli mark-in-progress <ID>")
+			os.Exit(1)
+		}
+		idStr := args[1]
+		id, err := strconv.Atoi(idStr)
+		if err != nil {
+			fmt.Printf("Ошибка: Неверный ID '%s': %v\n", idStr, err)
+			os.Exit(1)
+		}
+		markTask(id, "in-progress")
+
+	case "mark-done":
+		if len(args) < 2 {
+			fmt.Println("Ошибка: Использование: task-cli mark-done <ID>")
+			os.Exit(1)
+		}
+		idStr := args[1]
+		id, err := strconv.Atoi(idStr)
+		if err != nil {
+			fmt.Printf("Ошибка: Неверный ID '%s': %v\n", idStr, err)
+			os.Exit(1)
+		}
+		markTask(id, "done")
+
 	default:
 		fmt.Printf("Ошибка: Неизвестная команда '%s'. Используйте --help для справки.\n", cmd)
 		os.Exit(1)
@@ -81,6 +139,82 @@ func addTask(desc string) {
 	}
 
 	fmt.Printf("Задача успешно добавлена (ID: %d, статус: todo)\n", newID)
+}
+
+// updateTask — находит задачу по ID и меняет её описание.
+func updateTask(id int, newDesc string) {
+	tasks, err := models.LoadTasks()
+	if err != nil {
+		fmt.Printf("Ошибка загрузки задач: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Используем наш хелпер из Шага 1
+	idx := findTaskIndex(tasks, id)
+	if idx == -1 {
+		fmt.Printf("Ошибка: Задача с ID %d не найдена.\n", id)
+		os.Exit(1)
+	}
+
+	// Обновляем данные
+	tasks[idx].Description = newDesc
+	// Вызываем метод модели для обновления времени
+	tasks[idx].UpdateTimestamp()
+
+	// Сохраняем весь слайс обратно в JSON
+	if err := models.SaveTasks(tasks); err != nil {
+		fmt.Printf("Ошибка сохранения: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf("Задача %d успешно обновлена.\n", id)
+}
+
+func deleteTask(id int) {
+	tasks, err := models.LoadTasks()
+	if err != nil {
+		fmt.Printf("Ошибка загрузки задач: %v\n", err)
+		os.Exit(1)
+	}
+
+	idx := findTaskIndex(tasks, id)
+	if idx == -1 {
+		fmt.Printf("Ошибка: Задача с ID %d не найдена.\n", id)
+		os.Exit(1)
+	}
+
+	// Удаление: создаем новый слайс, соединяя части ДО и ПОСЛЕ индекса
+	tasks = append(tasks[:idx], tasks[idx+1:]...)
+
+	if err := models.SaveTasks(tasks); err != nil {
+		fmt.Printf("Ошибка сохранения: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("Задача %d успешно удалена.\n", id)
+}
+
+func markTask(id int, status string) {
+	tasks, err := models.LoadTasks()
+	if err != nil {
+		fmt.Printf("Ошибка загрузки задач: %v\n", err)
+		os.Exit(1)
+	}
+
+	idx := findTaskIndex(tasks, id)
+	if idx == -1 {
+		fmt.Printf("Ошибка: Задача с ID %d не найдена.\n", id)
+		os.Exit(1)
+	}
+
+	tasks[idx].Status = status
+	tasks[idx].UpdateTimestamp() // Обновляем время изменения
+
+	if err := models.SaveTasks(tasks); err != nil {
+		fmt.Printf("Ошибка сохранения: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("Задача %d успешно переведена в статус: %s\n", id, status)
 }
 
 // listTasks — загружает и печатает все задачи.
@@ -128,11 +262,24 @@ func listTasks(filter string) {
 	}
 }
 
+// findTaskIndex ищет индекс задачи по ID. -1 если не найден.
+func findTaskIndex(tasks []models.Task, id int) int {
+	for i, t := range tasks {
+		if t.ID == id {
+			return i
+		}
+	}
+	return -1
+}
+
 // printUsage — простая справка.
 func printUsage() {
 	fmt.Println("Использование: task-cli <command> [args]")
 	fmt.Println("Команды:")
-	fmt.Println("  add <description>             Добавить новую задачу (status: todo)")
-	fmt.Println("  list [todo|in-progress|done]  Показать задачи (фильтр опционален)")
-	fmt.Println("  --help                        Показать справку")
+	fmt.Println("  add <description>             Добавить задачу")
+	fmt.Println("  list [todo|in-progress|done]  Показать список")
+	fmt.Println("  update <ID> <description>     Обновить описание")
+	fmt.Println("  delete <ID>                   Удалить задачу")
+	fmt.Println("  mark-in-progress <ID>         Сделать 'в процессе'")
+	fmt.Println("  mark-done <ID>                Сделать 'выполнено'")
 }
