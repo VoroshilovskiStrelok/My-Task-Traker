@@ -17,7 +17,7 @@ type Task struct {
 
 // UpdateTimestamp обновляет время последнего изменения.
 func (t *Task) UpdateTimestamp() {
-	t.UpdatedAt = time.Now() // UTC по умолчанию, норм для JSON
+	t.UpdatedAt = time.Now().UTC() // UTC по умолчанию, норм для JSON
 }
 
 func LoadTasks() ([]Task, error) {

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 	"ty-task-tracker/models"
+	utils "ty-task-tracker/utils/errors.go"
 )
 
 func main() {
@@ -132,8 +133,8 @@ func addTask(desc string) {
 		ID:          newID,
 		Description: desc,
 		Status:      "todo",
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
+		CreatedAt:   time.Now().UTC(),
+		UpdatedAt:   time.Now().UTC(),
 	}
 	// Обновит UpdatedAt
 	newTask.UpdateTimestamp()
@@ -164,9 +165,9 @@ func updateTask(id int, newDesc string) {
 	}
 
 	// Используем наш хелпер из Шага 1
-	idx := findTaskIndex(tasks, id)
-	if idx == -1 {
-		fmt.Printf("Ошибка: Задача с ID %d не найдена.\n", id)
+	idx, err := findTaskIndex(tasks, id)
+	if err != nil {
+		fmt.Printf("Ошибка: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -190,9 +191,9 @@ func deleteTask(id int) {
 		os.Exit(1)
 	}
 
-	idx := findTaskIndex(tasks, id)
-	if idx == -1 {
-		fmt.Printf("Ошибка: Задача с ID %d не найдена.\n", id)
+	idx, err := findTaskIndex(tasks, id)
+	if err != nil {
+		fmt.Printf("Ошибка: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -214,9 +215,9 @@ func markTask(id int, status string) {
 		os.Exit(1)
 	}
 
-	idx := findTaskIndex(tasks, id)
-	if idx == -1 {
-		fmt.Printf("Ошибка: Задача с ID %d не найдена.\n", id)
+	idx, err := findTaskIndex(tasks, id)
+	if err != nil {
+		fmt.Printf("Ошибка: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -291,14 +292,15 @@ func listTasks(filter string) {
 	fmt.Printf("\nВсего задач в списке: %d\n", len(filtered))
 }
 
-// findTaskIndex ищет индекс задачи по ID. -1 если не найден.
-func findTaskIndex(tasks []models.Task, id int) int {
+// findTaskIndex возвращает индекс задачи и nil, либо -1 и кастомную ошибку, если ID не найден.
+func findTaskIndex(tasks []models.Task, id int) (int, error) {
 	for i, t := range tasks {
 		if t.ID == id {
-			return i
+			return i, nil
 		}
 	}
-	return -1
+	// Возвращаем нашу новую ошибку из пакета utils
+	return -1, &utils.ErrTaskNotFound{ID: id}
 }
 
 // printUsage — простая справка.
