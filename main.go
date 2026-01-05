@@ -109,6 +109,21 @@ func main() {
 		}
 		markTask(id, "done")
 
+	case "search":
+		if len(args) < 2 {
+			fmt.Println("Ошибка: Использование: task-cli search <ключевое слово>")
+			os.Exit(1)
+		}
+		keyword := strings.ToLower(args[1])
+		searchTasks(keyword)
+
+	case "export":
+		if len(args) < 2 || args[1] != "csv" {
+			fmt.Println("Ошибка: Использование: task-cli export csv")
+			os.Exit(1)
+		}
+		exportCSV()
+
 	default:
 		fmt.Printf("Ошибка: Неизвестная команда '%s'. Используйте --help для справки.\n", cmd)
 		os.Exit(1)
@@ -313,6 +328,63 @@ func addTaskLogic(initialTasks []models.Task, desc string) ([]models.Task, int, 
 	return append(initialTasks, newTask), newID, nil
 }
 
+// searchTasks ищет задачи по подстроке в описании.
+func searchTasks(keyword string) {
+	tasks, err := models.LoadTasks()
+	if err != nil {
+		fmt.Printf("Ошибка: %v\n", err)
+		os.Exit(1)
+	}
+
+	var found []models.Task
+	for _, t := range tasks {
+		// Приводим описание к нижнему регистру для поиска без учета регистра
+		if strings.Contains(strings.ToLower(t.Description), keyword) {
+			found = append(found, t)
+		}
+	}
+
+	if len(found) == 0 {
+		fmt.Printf("Задачи по запросу '%s' не найдены.\n", keyword)
+		return
+	}
+
+	fmt.Printf("Найдено задач (%d):\n", len(found))
+	fmt.Printf("%-3s | %-30s | %-12s\n", "ID", "Description", "Status")
+	fmt.Println(strings.Repeat("-", 50))
+	for _, t := range found {
+		fmt.Printf("%-3d | %-30.30s | %-12s\n", t.ID, t.Description, t.Status)
+	}
+}
+
+// exportCSV выводит данные в формате CSV прямо в консоль.
+func exportCSV() {
+	tasks, err := models.LoadTasks()
+	if err != nil {
+		fmt.Printf("Ошибка: %v\n", err)
+		os.Exit(1)
+	}
+
+	if len(tasks) == 0 {
+		fmt.Println("Нет задач для экспорта.")
+		return
+	}
+
+	// Заголовок CSV
+	fmt.Println("ID,Description,Status,CreatedAt,UpdatedAt")
+	for _, t := range tasks {
+		// Чтобы запятые в описании не ломали CSV, заменяем их на точку с запятой
+		descClean := strings.ReplaceAll(t.Description, ",", ";")
+		fmt.Printf("%d,%s,%s,%s,%s\n",
+			t.ID,
+			descClean,
+			t.Status,
+			t.CreatedAt.Format(time.RFC3339),
+			t.UpdatedAt.Format(time.RFC3339),
+		)
+	}
+}
+
 // printUsage — простая справка.
 func printUsage() {
 	fmt.Println("Task Tracker CLI — Управляй своими задачами из терминала")
@@ -330,4 +402,6 @@ func printUsage() {
 	fmt.Println("  ./task-cli add \"Купить хлеб\"")
 	fmt.Println("  ./task-cli list todo")
 	fmt.Println("  ./task-cli mark-done 1")
+	fmt.Println("  search <keyword>           Поиск задач по описанию")
+	fmt.Println("  export csv                 Экспорт всех задач в формат CSV")
 }
