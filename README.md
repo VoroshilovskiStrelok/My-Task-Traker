@@ -20,9 +20,6 @@
    git clone github.com
    cd ty-task-tracker
 
-
-
-    !Использование
 bash
 # Добавить задачу
 ./task-cli add "Изучить Go тесты"
@@ -39,15 +36,15 @@ bash
 # Ещё куча команд через --help
     ./task-cli.exe --help
 
-    !Тестирование
+# Тестирование
 Проект покрыт Unit и Integration тестами. Для запуска выполните:
 bash
 go test ./... -v -cover
 
 
-    !Структура JSON
+# Структура JSON
 Задачи сохраняются в файл tasks.json в следующем формате:
-json
+   ```bash json
 [
   {
     "id": 1,
@@ -57,3 +54,4 @@ json
     "updated_at": "2026-01-05T10:00:00Z"
   }
 ]
+bash
