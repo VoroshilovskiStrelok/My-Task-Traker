@@ -117,36 +117,23 @@ func main() {
 
 // addTask — добавляет новую задачу (Загрузить + добавить + Сохранить).
 func addTask(desc string) {
-	desc = strings.TrimSpace(desc) // Чистим пробелы
-	if desc == "" {
-		fmt.Println("Ошибка: Описание задачи не может быть пустым.")
-		os.Exit(1)
-	}
 	tasks, err := models.LoadTasks()
 	if err != nil {
-		fmt.Printf("Ошибка загрузки задач: %v\n", err)
+		fmt.Printf("Ошибка загрузки: %v\n", err)
 		os.Exit(1)
 	}
 
-	newID := len(tasks) + 1
-	newTask := models.Task{
-		ID:          newID,
-		Description: desc,
-		Status:      "todo",
-		CreatedAt:   time.Now().UTC(),
-		UpdatedAt:   time.Now().UTC(),
-	}
-	// Обновит UpdatedAt
-	newTask.UpdateTimestamp()
-
-	tasks = append(tasks, newTask)
-
-	if err := models.SaveTasks(tasks); err != nil {
-		fmt.Printf("Ошибка сохранения задачи: %v\n", err)
+	newTasks, newID, err := addTaskLogic(tasks, desc)
+	if err != nil {
+		fmt.Printf("Ошибка: %v\n", err)
 		os.Exit(1)
 	}
 
-	fmt.Printf("Задача успешно добавлена (ID: %d, статус: todo)\n", newID)
+	if err := models.SaveTasks(newTasks); err != nil {
+		fmt.Printf("Ошибка сохранения: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf("Задача успешно добавлена (ID: %d)\n", newID)
 }
 
 // updateTask — находит задачу по ID и меняет её описание.
@@ -301,6 +288,29 @@ func findTaskIndex(tasks []models.Task, id int) (int, error) {
 	}
 	// Возвращаем нашу новую ошибку из пакета utils
 	return -1, &utils.ErrTaskNotFound{ID: id}
+}
+
+func addTaskLogic(initialTasks []models.Task, desc string) ([]models.Task, int, error) {
+	desc = strings.TrimSpace(desc)
+	if desc == "" {
+		return nil, 0, fmt.Errorf("описание задачи не может быть пустым")
+	}
+
+	newID := 1
+	if len(initialTasks) > 0 {
+		// Умная генерация ID: берем последний + 1
+		newID = initialTasks[len(initialTasks)-1].ID + 1
+	}
+
+	newTask := models.Task{
+		ID:          newID,
+		Description: desc,
+		Status:      "todo",
+		CreatedAt:   time.Now().UTC(),
+		UpdatedAt:   time.Now().UTC(),
+	}
+
+	return append(initialTasks, newTask), newID, nil
 }
 
 // printUsage — простая справка.
